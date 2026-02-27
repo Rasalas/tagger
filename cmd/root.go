@@ -4,15 +4,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rasalas/tagger/internal/term"
 	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
-	Use:           "cli-template",
-	Short:         "A brief description of your tool",
-	Long:          "A longer description of what your tool does.",
-	RunE:          run,
+	Use:           "tagger",
+	Short:         "Semantic Git tagging based on Conventional Commits",
+	Long:          "Tagger reads commits since the last tag, determines the next semver bump, and creates the tag.",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	Version:       "0.0.1-dev",
@@ -35,12 +33,4 @@ type exitError struct {
 
 func (e *exitError) Error() string {
 	return fmt.Sprintf("exit %d", e.code)
-}
-
-func run(cmd *cobra.Command, args []string) error {
-	term.Header("cli-template")
-	term.Info("Hello! Replace this with your tool's logic.")
-	term.Pass("Setup complete")
-	fmt.Fprintln(term.W)
-	return nil
 }

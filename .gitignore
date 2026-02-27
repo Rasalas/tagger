@@ -1,5 +1,5 @@
 # Binaries
-cli-template
+tagger
 *.exe
 dist/
 

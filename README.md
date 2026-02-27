@@ -1,27 +1,55 @@
-# cli-template
+# tagger
 
-A Go CLI project template for use with [`gonew`](https://pkg.go.dev/golang.org/x/tools/cmd/gonew).
+Semantic Git tagging based on Conventional Commits.
+
+Tagger reads commits since the last tag, determines the next semver bump (major/minor/patch), and creates the tag. No changelog, no release notes — just the tag.
 
 ## Usage
 
 ```bash
-gonew github.com/rasalas/cli-template github.com/rasalas/my-tool
-cd my-tool
-go run .
+# Preview what would happen
+tagger bump --dry-run
+
+# Create the next tag (with confirmation prompt)
+tagger bump
+
+# Create and push, skip confirmation
+tagger bump --push --yes
+
+# Force a specific bump level
+tagger bump --major
+tagger bump --minor
+tagger bump --patch
 ```
 
-## What's included
+## Flags
 
-- Cobra CLI with `--version` flag and exit code handling
-- `internal/term/` color system with NO_COLOR support
-- `.goreleaser.yml` for cross-platform releases
-- `CLAUDE.md` template for AI-assisted development
-- `docs/decisions/` directory for ADRs
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--push` | `-p` | `false` | Push tag after creation |
+| `--yes` | `-y` | `false` | Skip confirmation prompt |
+| `--dry-run` | — | `false` | Show what would happen without making changes |
+| `--major` | — | `false` | Force a major bump |
+| `--minor` | — | `false` | Force a minor bump |
+| `--patch` | — | `false` | Force a patch bump |
+| `--prefix` | — | `v` | Tag prefix |
 
-## After scaffolding
+## Conventional Commits
 
-1. Update `CLAUDE.md` with your project's details
-2. Update `cmd/root.go` — change `Use`, `Short`, `Long`, and `Version`
-3. Pick a primary color in `internal/term/colors.go`
-4. Update binary name in `.goreleaser.yml`
-5. Update `.gitignore` (replace `cli-template` with your binary name)
+Tagger uses [Conventional Commits](https://www.conventionalcommits.org/) to determine the bump level:
+
+| Commit | Bump |
+|--------|------|
+| `feat: ...` | minor |
+| `fix: ...` | patch |
+| `refactor: ...` | patch |
+| `perf: ...` | patch |
+| `revert: ...` | patch |
+| `feat!: ...` or `BREAKING CHANGE:` in body | major |
+| anything else | none (ignored) |
+
+## Install
+
+```bash
+go install github.com/rasalas/tagger@latest
+```
