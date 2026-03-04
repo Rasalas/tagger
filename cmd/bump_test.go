@@ -51,7 +51,7 @@ func setupTest(mock *mockGit) (*bytes.Buffer, func()) {
 		git.Default = origGit
 		term.W = origW
 		// Reset cobra flags to defaults between tests
-		bumpCmd.Flags().Set("push", "false")
+		bumpCmd.Flags().Set("no-push", "false")
 		bumpCmd.Flags().Set("yes", "false")
 		bumpCmd.Flags().Set("dry-run", "false")
 		bumpCmd.Flags().Set("major", "false")
@@ -219,7 +219,7 @@ func TestBumpNoTag(t *testing.T) {
 	}
 }
 
-func TestBumpWithPush(t *testing.T) {
+func TestBumpPushesByDefault(t *testing.T) {
 	mock := &mockGit{
 		latestTag: "v1.0.0",
 		commits:   []string{"feat: add feature"},
@@ -227,7 +227,7 @@ func TestBumpWithPush(t *testing.T) {
 	buf, cleanup := setupTest(mock)
 	defer cleanup()
 
-	rootCmd.SetArgs([]string{"bump", "--push", "--yes"})
+	rootCmd.SetArgs([]string{"bump", "--yes"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -241,6 +241,27 @@ func TestBumpWithPush(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "Pushed v1.1.0") {
 		t.Errorf("expected pushed message, got:\n%s", out)
+	}
+}
+
+func TestBumpNoPush(t *testing.T) {
+	mock := &mockGit{
+		latestTag: "v1.0.0",
+		commits:   []string{"feat: add feature"},
+	}
+	_, cleanup := setupTest(mock)
+	defer cleanup()
+
+	rootCmd.SetArgs([]string{"bump", "--no-push", "--yes"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if mock.createdTag != "v1.1.0" {
+		t.Errorf("created tag = %q, want %q", mock.createdTag, "v1.1.0")
+	}
+	if mock.pushedTag != "" {
+		t.Errorf("should not have pushed, but pushed %q", mock.pushedTag)
 	}
 }
 

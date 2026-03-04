@@ -21,7 +21,7 @@ var bumpCmd = &cobra.Command{
 }
 
 func init() {
-	bumpCmd.Flags().BoolP("push", "p", false, "Push tag after creation")
+	bumpCmd.Flags().Bool("no-push", false, "Skip pushing the tag to origin")
 	bumpCmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt")
 	bumpCmd.Flags().Bool("dry-run", false, "Show what would happen without making changes")
 	bumpCmd.Flags().Bool("major", false, "Force a major bump")
@@ -32,7 +32,7 @@ func init() {
 }
 
 func runBump(cmd *cobra.Command, args []string) error {
-	push, _ := cmd.Flags().GetBool("push")
+	noPush, _ := cmd.Flags().GetBool("no-push")
 	yes, _ := cmd.Flags().GetBool("yes")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	forceMajor, _ := cmd.Flags().GetBool("major")
@@ -164,8 +164,8 @@ func runBump(cmd *cobra.Command, args []string) error {
 	}
 	term.Pass("Created " + nextTag)
 
-	// Push
-	if push {
+	// Push (default: always push, skip with --no-push)
+	if !noPush {
 		if err := git.PushTag(nextTag); err != nil {
 			return fmt.Errorf("failed to push tag: %w", err)
 		}
