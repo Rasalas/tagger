@@ -18,6 +18,11 @@ Breaking changes are detected via:
 - `!` suffix before the colon (e.g., `feat!: remove API`)
 - `BREAKING CHANGE:` / `BREAKING-CHANGE:` trailer in the body
 
+GitLab merge commit subjects are accepted when the source branch starts with a
+Conventional Commit prefix followed by `/`. For example,
+`Merge branch 'feat/split-gitlab-ci' into 'main'` is interpreted as
+`feat: split-gitlab-ci`.
+
 ## Consequences
 
 - **Deterministic:** The same commit always produces the same bump level — no ambiguity.

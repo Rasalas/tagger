@@ -32,11 +32,20 @@ func Parse(message string) Commit {
 		}
 	}
 
-	// Split on first ':'
+	if parseGitLabMerge(first, &c) {
+		return c
+	}
+
+	if !parseConventionalHeader(first, &c) {
+		c.Summary = first
+	}
+	return c
+}
+
+func parseConventionalHeader(first string, c *Commit) bool {
 	prefix, summary, found := strings.Cut(first, ":")
 	if !found {
-		c.Summary = first
-		return c
+		return false
 	}
 	c.Summary = strings.TrimSpace(summary)
 
@@ -59,7 +68,27 @@ func Parse(message string) Commit {
 	}
 
 	c.Type = strings.TrimSpace(c.Type)
-	return c
+	return true
+}
+
+func parseGitLabMerge(first string, c *Commit) bool {
+	const prefix = "Merge branch '"
+	if !strings.HasPrefix(first, prefix) {
+		return false
+	}
+
+	rest := strings.TrimPrefix(first, prefix)
+	branch, suffix, found := strings.Cut(rest, "'")
+	if !found || !strings.HasPrefix(strings.TrimSpace(suffix), "into '") {
+		return false
+	}
+
+	commitPrefix, summary, found := strings.Cut(strings.TrimSpace(branch), "/")
+	if !found || strings.TrimSpace(commitPrefix) == "" || strings.TrimSpace(summary) == "" {
+		return false
+	}
+
+	return parseConventionalHeader(commitPrefix+": "+summary, c)
 }
 
 // Classify returns the bump level for a single commit.

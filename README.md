@@ -48,6 +48,10 @@ Tagger uses [Conventional Commits](https://www.conventionalcommits.org/) to dete
 | `feat!: ...` or `BREAKING CHANGE:` in body | major |
 | anything else | none (ignored) |
 
+GitLab merge commits with a Conventional Commit source branch are also recognized.
+For example, `Merge branch 'feat/split-gitlab-ci' into 'main'` is treated like
+`feat: split-gitlab-ci`.
+
 ## Install
 
 ```bash

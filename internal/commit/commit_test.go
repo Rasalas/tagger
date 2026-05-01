@@ -62,6 +62,31 @@ func TestParse(t *testing.T) {
 			message: "fix(ui): button color\n\nThe button was blue instead of green.",
 			want:    Commit{Type: "fix", Scope: "ui", Summary: "button color", Body: "The button was blue instead of green."},
 		},
+		{
+			name:    "gitlab merge branch feat",
+			message: "Merge branch 'feat/split-gitlab-ci' into 'main'",
+			want:    Commit{Type: "feat", Summary: "split-gitlab-ci"},
+		},
+		{
+			name:    "gitlab merge branch fix with nested path",
+			message: "Merge branch 'fix/gitlab/pipeline-status' into 'main'",
+			want:    Commit{Type: "fix", Summary: "gitlab/pipeline-status"},
+		},
+		{
+			name:    "gitlab merge branch scoped breaking",
+			message: "Merge branch 'refactor(core)!/rewrite-engine' into 'main'",
+			want:    Commit{Type: "refactor", Scope: "core", Breaking: true, Summary: "rewrite-engine"},
+		},
+		{
+			name:    "gitlab merge branch keeps body",
+			message: "Merge branch 'feat/api-v2' into 'main'\n\nSee merge request project/repo!7",
+			want:    Commit{Type: "feat", Summary: "api-v2", Body: "See merge request project/repo!7"},
+		},
+		{
+			name:    "gitlab merge branch without conventional branch",
+			message: "Merge branch 'release' into 'main'",
+			want:    Commit{Summary: "Merge branch 'release' into 'main'"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -134,6 +159,21 @@ func TestAnalyze(t *testing.T) {
 		level, _ := Analyze(messages)
 		if level != semver.Major {
 			t.Errorf("level = %v, want Major", level)
+		}
+	})
+
+	t.Run("gitlab merge branch contributes bump", func(t *testing.T) {
+		messages := []string{
+			"Merge branch 'fix/pipeline-status' into 'main'",
+			"Merge branch 'feat/split-gitlab-ci' into 'main'",
+			"chore: update deps",
+		}
+		level, commits := Analyze(messages)
+		if level != semver.Minor {
+			t.Errorf("level = %v, want Minor", level)
+		}
+		if len(commits) != 3 {
+			t.Errorf("len(commits) = %d, want 3", len(commits))
 		}
 	})
 
