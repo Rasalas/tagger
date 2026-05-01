@@ -3,9 +3,12 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"github.com/spf13/cobra"
 )
+
+var version = "0.0.1-dev"
 
 var rootCmd = &cobra.Command{
 	Use:           "tagger",
@@ -13,7 +16,7 @@ var rootCmd = &cobra.Command{
 	Long:          "Tagger reads commits since the last tag, determines the next semver bump, and creates the tag.",
 	SilenceUsage:  true,
 	SilenceErrors: true,
-	Version:       "0.0.1-dev",
+	Version:       buildVersion(),
 }
 
 // Execute runs the root command.
@@ -33,4 +36,19 @@ type exitError struct {
 
 func (e *exitError) Error() string {
 	return fmt.Sprintf("exit %d", e.code)
+}
+
+func buildVersion() string {
+	if version != "" && version != "0.0.1-dev" {
+		return version
+	}
+	info, ok := debug.ReadBuildInfo()
+	return versionFromBuildInfo(info, ok)
+}
+
+func versionFromBuildInfo(info *debug.BuildInfo, ok bool) string {
+	if ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return version
 }
