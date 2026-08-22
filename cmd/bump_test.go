@@ -58,6 +58,10 @@ func setupTest(mock *mockGit) (*bytes.Buffer, func()) {
 		bumpCmd.Flags().Set("minor", "false")
 		bumpCmd.Flags().Set("patch", "false")
 		bumpCmd.Flags().Set("prefix", "v")
+		statusCmd.Flags().Set("major", "false")
+		statusCmd.Flags().Set("minor", "false")
+		statusCmd.Flags().Set("patch", "false")
+		statusCmd.Flags().Set("prefix", "v")
 	}
 }
 
@@ -280,5 +284,94 @@ func TestBumpBreakingCommit(t *testing.T) {
 
 	if mock.createdTag != "v2.0.0" {
 		t.Errorf("created tag = %q, want %q", mock.createdTag, "v2.0.0")
+	}
+}
+
+func TestBumpIncrementsBuildTag(t *testing.T) {
+	mock := &mockGit{
+		latestTag: "v3.4.0-58",
+		commits:   []string{"fix: repair export"},
+	}
+	_, cleanup := setupTest(mock)
+	defer cleanup()
+
+	rootCmd.SetArgs([]string{"bump", "--yes"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if mock.createdTag != "v3.4.1-59" {
+		t.Errorf("created tag = %q, want %q", mock.createdTag, "v3.4.1-59")
+	}
+	if mock.pushedTag != "v3.4.1-59" {
+		t.Errorf("pushed tag = %q, want %q", mock.pushedTag, "v3.4.1-59")
+	}
+}
+
+func TestBumpParsesConfiguredPrefix(t *testing.T) {
+	mock := &mockGit{
+		latestTag: "release-3.4.0-58",
+		commits:   []string{"fix: repair export"},
+	}
+	_, cleanup := setupTest(mock)
+	defer cleanup()
+
+	rootCmd.SetArgs([]string{"bump", "--prefix", "release-", "--yes"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if mock.createdTag != "release-3.4.1-59" {
+		t.Errorf("created tag = %q, want %q", mock.createdTag, "release-3.4.1-59")
+	}
+}
+
+func TestStatusSuggestsWithoutCreatingTag(t *testing.T) {
+	mock := &mockGit{
+		latestTag: "v3.4.0-58",
+		commits:   []string{"feat: add report filters"},
+	}
+	buf, cleanup := setupTest(mock)
+	defer cleanup()
+
+	rootCmd.SetArgs([]string{"status"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "v3.5.0-59") {
+		t.Errorf("expected next tag v3.5.0-59 in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Suggestion only") {
+		t.Errorf("expected suggestion message in output, got:\n%s", out)
+	}
+	if mock.createdTag != "" {
+		t.Errorf("status should not create a tag, created %q", mock.createdTag)
+	}
+	if mock.pushedTag != "" {
+		t.Errorf("status should not push a tag, pushed %q", mock.pushedTag)
+	}
+}
+
+func TestSuggestAlias(t *testing.T) {
+	mock := &mockGit{
+		latestTag: "v1.2.3",
+		commits:   []string{"fix: repair export"},
+	}
+	buf, cleanup := setupTest(mock)
+	defer cleanup()
+
+	rootCmd.SetArgs([]string{"suggest"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "v1.2.4") {
+		t.Errorf("expected next tag v1.2.4 in output, got:\n%s", out)
+	}
+	if mock.createdTag != "" {
+		t.Errorf("suggest should not create a tag, created %q", mock.createdTag)
 	}
 }
