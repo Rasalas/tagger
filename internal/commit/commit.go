@@ -47,27 +47,32 @@ func parseConventionalHeader(first string, c *Commit) bool {
 	if !found {
 		return false
 	}
-	c.Summary = strings.TrimSpace(summary)
 
 	// Check for '!' before the colon
-	if strings.HasSuffix(prefix, "!") {
-		c.Breaking = true
+	breaking := strings.HasSuffix(prefix, "!")
+	if breaking {
 		prefix = prefix[:len(prefix)-1]
 	}
 
 	// Extract scope from "type(scope)"
+	var typ, scope string
 	if open := strings.Index(prefix, "("); open != -1 {
-		if close := strings.Index(prefix[open:], ")"); close != -1 {
-			c.Scope = prefix[open+1 : open+close]
-			c.Type = prefix[:open]
-		} else {
-			c.Type = prefix
+		close := strings.Index(prefix[open:], ")")
+		if close == -1 {
+			// Unclosed parenthesis — not a valid conventional header.
+			return false
 		}
+		scope = prefix[open+1 : open+close]
+		typ = prefix[:open]
 	} else {
-		c.Type = prefix
+		typ = prefix
 	}
 
-	c.Type = strings.TrimSpace(c.Type)
+	// Only mutate the commit once the header is known to be valid.
+	c.Summary = strings.TrimSpace(summary)
+	c.Breaking = c.Breaking || breaking
+	c.Scope = scope
+	c.Type = strings.ToLower(strings.TrimSpace(typ))
 	return true
 }
 
