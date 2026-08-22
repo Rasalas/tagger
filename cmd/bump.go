@@ -20,21 +20,50 @@ var bumpCmd = &cobra.Command{
 	RunE:  runBump,
 }
 
+var statusCmd = &cobra.Command{
+	Use:     "status",
+	Aliases: []string{"suggest"},
+	Short:   "Suggest the next semver tag without creating it",
+	Long:    "Analyzes commits since the last tag using Conventional Commits and suggests the next semantic version tag.",
+	RunE:    runStatus,
+}
+
 func init() {
 	bumpCmd.Flags().Bool("no-push", false, "Skip pushing the tag to origin")
 	bumpCmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt")
 	bumpCmd.Flags().Bool("dry-run", false, "Show what would happen without making changes")
-	bumpCmd.Flags().Bool("major", false, "Force a major bump")
-	bumpCmd.Flags().Bool("minor", false, "Force a minor bump")
-	bumpCmd.Flags().Bool("patch", false, "Force a patch bump")
-	bumpCmd.Flags().String("prefix", "v", "Tag prefix")
+	addAnalysisFlags(bumpCmd)
 	rootCmd.AddCommand(bumpCmd)
+
+	addAnalysisFlags(statusCmd)
+	rootCmd.AddCommand(statusCmd)
+}
+
+func addAnalysisFlags(c *cobra.Command) {
+	c.Flags().Bool("major", false, "Force a major bump")
+	c.Flags().Bool("minor", false, "Force a minor bump")
+	c.Flags().Bool("patch", false, "Force a patch bump")
+	c.Flags().String("prefix", "v", "Tag prefix")
+}
+
+func runStatus(cmd *cobra.Command, args []string) error {
+	return runBumpPlan(cmd, true, "Suggestion only — no changes made")
 }
 
 func runBump(cmd *cobra.Command, args []string) error {
-	noPush, _ := cmd.Flags().GetBool("no-push")
-	yes, _ := cmd.Flags().GetBool("yes")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	return runBumpPlan(cmd, dryRun, "Dry run — no changes made")
+}
+
+func runBumpPlan(cmd *cobra.Command, dryRun bool, dryRunMessage string) error {
+	noPush := false
+	yes := true
+	if cmd.Flags().Lookup("no-push") != nil {
+		noPush, _ = cmd.Flags().GetBool("no-push")
+	}
+	if cmd.Flags().Lookup("yes") != nil {
+		yes, _ = cmd.Flags().GetBool("yes")
+	}
 	forceMajor, _ := cmd.Flags().GetBool("major")
 	forceMinor, _ := cmd.Flags().GetBool("minor")
 	forcePatch, _ := cmd.Flags().GetBool("patch")
@@ -60,14 +89,15 @@ func runBump(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get latest tag: %w", err)
 	}
+	hasLatestTag := latestTag != ""
 
 	var current semver.Version
-	if latestTag == "" {
+	if !hasLatestTag {
 		current = semver.Version{}
 		latestTag = current.Format(prefix)
 		term.Info(fmt.Sprintf("No tags found, starting from %s", latestTag))
 	} else {
-		current, err = semver.Parse(latestTag)
+		current, err = semver.ParseWithPrefix(latestTag, prefix)
 		if err != nil {
 			return fmt.Errorf("failed to parse tag %q: %w", latestTag, err)
 		}
@@ -75,9 +105,7 @@ func runBump(cmd *cobra.Command, args []string) error {
 
 	// Get commits since tag
 	var commitTag string
-	if current == (semver.Version{}) {
-		commitTag = "" // no previous tag, get all commits
-	} else {
+	if hasLatestTag {
 		commitTag = latestTag
 	}
 	messages, err := git.CommitsSince(commitTag)
@@ -142,7 +170,7 @@ func runBump(cmd *cobra.Command, args []string) error {
 	fmt.Fprintln(term.W)
 
 	if dryRun {
-		term.Info("Dry run — no changes made")
+		term.Info(dryRunMessage)
 		return nil
 	}
 
