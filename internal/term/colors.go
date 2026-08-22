@@ -27,14 +27,34 @@ var (
 )
 
 func init() {
-	if os.Getenv("NO_COLOR") != "" {
-		Bold = ""
-		Dim = ""
-		Reset = ""
-		Primary = ""
-		Muted = ""
-		Green = ""
-		Red = ""
-		Yellow = ""
+	if !colorEnabled() {
+		disable()
 	}
+}
+
+// colorEnabled reports whether ANSI colors should be used: disabled by
+// NO_COLOR, enabled by FORCE_COLOR, otherwise only when stdout is a terminal.
+func colorEnabled() bool {
+	if os.Getenv("FORCE_COLOR") != "" {
+		return true
+	}
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+func disable() {
+	Bold = ""
+	Dim = ""
+	Reset = ""
+	Primary = ""
+	Muted = ""
+	Green = ""
+	Red = ""
+	Yellow = ""
 }

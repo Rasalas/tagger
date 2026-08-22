@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -44,12 +46,18 @@ func (m *mockGit) PushTag(tag string) error {
 func setupTest(mock *mockGit) (*bytes.Buffer, func()) {
 	origGit := git.Default
 	origW := term.W
+	origConfirmIn := confirmIn
+	origConfirmIsTTY := confirmIsTTY
 	buf := &bytes.Buffer{}
 	git.Default = mock
 	term.W = buf
+	confirmIn = os.Stdin
+	confirmIsTTY = func() bool { return true }
 	return buf, func() {
 		git.Default = origGit
 		term.W = origW
+		confirmIn = origConfirmIn
+		confirmIsTTY = origConfirmIsTTY
 		// Reset cobra flags to defaults between tests
 		bumpCmd.Flags().Set("no-push", "false")
 		bumpCmd.Flags().Set("yes", "false")
@@ -202,6 +210,49 @@ func TestBumpMultipleForceFlags(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "only one") {
 		t.Errorf("unexpected error: %v", err)
+	}
+	var cfgErr *ConfigError
+	if !errors.As(err, &cfgErr) {
+		t.Errorf("force flag conflict should be a ConfigError, got %T", err)
+	}
+}
+
+func TestBumpInvalidTagIsConfigError(t *testing.T) {
+	mock := &mockGit{
+		latestTag: "not-a-version",
+		commits:   []string{"feat: something"},
+	}
+	_, cleanup := setupTest(mock)
+	defer cleanup()
+
+	rootCmd.SetArgs([]string{"bump", "--yes"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for unparsable tag")
+	}
+	var cfgErr *ConfigError
+	if !errors.As(err, &cfgErr) {
+		t.Errorf("unparsable tag should be a ConfigError, got %T: %v", err, err)
+	}
+}
+
+func TestBumpGitFailureIsRuntimeError(t *testing.T) {
+	mock := &mockGit{
+		latestTag: "v1.0.0",
+		commits:   []string{"feat: add feature"},
+		createErr: errors.New("exit status 128: permission denied"),
+	}
+	_, cleanup := setupTest(mock)
+	defer cleanup()
+
+	rootCmd.SetArgs([]string{"bump", "--yes"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when CreateTag fails")
+	}
+	var cfgErr *ConfigError
+	if errors.As(err, &cfgErr) {
+		t.Errorf("git runtime failure must not be a ConfigError, got: %v", err)
 	}
 }
 
@@ -373,5 +424,93 @@ func TestSuggestAlias(t *testing.T) {
 	}
 	if mock.createdTag != "" {
 		t.Errorf("suggest should not create a tag, created %q", mock.createdTag)
+	}
+}
+
+func TestBumpRefusesNonInteractiveWithoutYes(t *testing.T) {
+	mock := &mockGit{
+		latestTag: "v1.0.0",
+		commits:   []string{"feat: add feature"},
+	}
+	buf, cleanup := setupTest(mock)
+	defer cleanup()
+	confirmIsTTY = func() bool { return false }
+
+	rootCmd.SetArgs([]string{"bump"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error in non-interactive session without --yes")
+	}
+	if !strings.Contains(err.Error(), "--yes") {
+		t.Errorf("error should hint at --yes, got: %v", err)
+	}
+	if mock.createdTag != "" {
+		t.Errorf("no tag should be created without confirmation, created %q", mock.createdTag)
+	}
+	_ = buf
+}
+
+func TestBumpPromptEOFAborts(t *testing.T) {
+	mock := &mockGit{
+		latestTag: "v1.0.0",
+		commits:   []string{"feat: add feature"},
+	}
+	buf, cleanup := setupTest(mock)
+	defer cleanup()
+	confirmIn = strings.NewReader("")
+
+	rootCmd.SetArgs([]string{"bump"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Aborted") {
+		t.Errorf("expected abort message on EOF, got:\n%s", out)
+	}
+	if mock.createdTag != "" {
+		t.Errorf("EOF must never create a tag, created %q", mock.createdTag)
+	}
+}
+
+func TestBumpPromptDeclineAborts(t *testing.T) {
+	mock := &mockGit{
+		latestTag: "v1.0.0",
+		commits:   []string{"feat: add feature"},
+	}
+	buf, cleanup := setupTest(mock)
+	defer cleanup()
+	confirmIn = strings.NewReader("n\n")
+
+	rootCmd.SetArgs([]string{"bump"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Aborted") {
+		t.Errorf("expected abort message on decline, got:\n%s", out)
+	}
+	if mock.createdTag != "" {
+		t.Errorf("no tag should be created after decline, created %q", mock.createdTag)
+	}
+}
+
+func TestBumpPromptAcceptCreatesTag(t *testing.T) {
+	mock := &mockGit{
+		latestTag: "v1.0.0",
+		commits:   []string{"feat: add feature"},
+	}
+	_, cleanup := setupTest(mock)
+	defer cleanup()
+	confirmIn = strings.NewReader("y\n")
+
+	rootCmd.SetArgs([]string{"bump"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if mock.createdTag != "v1.1.0" {
+		t.Errorf("created tag = %q, want %q", mock.createdTag, "v1.1.0")
 	}
 }

@@ -70,21 +70,21 @@ func parse(s, tag string) (Version, error) {
 		return Version{}, fmt.Errorf("invalid version: %q", tag)
 	}
 	maj, err := strconv.Atoi(parts[0])
-	if err != nil {
+	if err != nil || maj < 0 {
 		return Version{}, fmt.Errorf("invalid major: %q", tag)
 	}
 	min, err := strconv.Atoi(parts[1])
-	if err != nil {
+	if err != nil || min < 0 {
 		return Version{}, fmt.Errorf("invalid minor: %q", tag)
 	}
 	pat, err := strconv.Atoi(parts[2])
-	if err != nil {
+	if err != nil || pat < 0 {
 		return Version{}, fmt.Errorf("invalid patch: %q", tag)
 	}
 	v := Version{Major: maj, Minor: min, Patch: pat}
 	if hasBuild {
 		n, err := strconv.Atoi(build)
-		if err != nil {
+		if err != nil || n < 0 {
 			return Version{}, fmt.Errorf("invalid build: %q", tag)
 		}
 		v.Build = n

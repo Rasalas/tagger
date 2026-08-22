@@ -21,6 +21,10 @@ func TestParse(t *testing.T) {
 		{"v1.2.3-", Version{}, true},
 		{"v1.2.3-1-2", Version{}, true},
 		{"", Version{}, true},
+		{"v-1.2.3", Version{}, true},
+		{"v1.-2.3", Version{}, true},
+		{"v1.2.-3", Version{}, true},
+		{"v1.2.3--4", Version{}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

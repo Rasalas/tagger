@@ -12,7 +12,7 @@ Tagger needs to determine the semver bump level from commit history. There are s
 
 ## Decision
 
-Tagger exclusively uses the Conventional Commits specification to classify commits. Only recognized types (`feat`, `fix`, `refactor`, `perf`, `revert`) produce a bump. Non-conforming messages are silently ignored (`None`).
+Tagger exclusively uses the Conventional Commits specification to classify commits. Only recognized types (`feat`, `fix`, `refactor`, `perf`, `revert`) produce a bump. Non-conforming messages are silently ignored (`None`). Commit types are matched case-insensitively and normalized to lowercase (`Feat:` counts as `feat`), mirroring common tooling behavior.
 
 Breaking changes are detected via:
 - `!` suffix before the colon (e.g., `feat!: remove API`)

@@ -1,0 +1,12 @@
+version: "2"
+
+linters:
+  default: standard
+  settings:
+    errcheck:
+      exclude-functions:
+        # CLI print helpers: a failed write to the terminal is not actionable.
+        - fmt.Fprintf
+        - fmt.Fprintln
+        # Flag resets in test cleanup cannot be handled meaningfully.
+        - (*github.com/spf13/pflag.FlagSet).Set

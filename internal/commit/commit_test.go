@@ -53,6 +53,26 @@ func TestParse(t *testing.T) {
 			want:    Commit{Summary: "update readme"},
 		},
 		{
+			name:    "uppercase type is case-insensitive",
+			message: "Feat: add login",
+			want:    Commit{Type: "feat", Summary: "add login"},
+		},
+		{
+			name:    "mixed-case type is lowercased",
+			message: "FIX(ui): resolve crash",
+			want:    Commit{Type: "fix", Scope: "ui", Summary: "resolve crash"},
+		},
+		{
+			name:    "unclosed scope is not conventional",
+			message: "feat(auth: add login",
+			want:    Commit{Summary: "feat(auth: add login"},
+		},
+		{
+			name:    "unclosed scope with bang does not stay breaking",
+			message: "feat(auth!: add login",
+			want:    Commit{Summary: "feat(auth!: add login"},
+		},
+		{
 			name:    "chore",
 			message: "chore: update deps",
 			want:    Commit{Type: "chore", Summary: "update deps"},

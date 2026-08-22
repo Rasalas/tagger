@@ -1,8 +1,12 @@
 package git
 
 import (
+	"bytes"
+	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/rasalas/tagger/internal/semver"
 )
 
 // Git defines the operations needed for tagging.
@@ -20,22 +24,38 @@ var Default Git = ExecGit{}
 type ExecGit struct{}
 
 func run(args ...string) (string, error) {
+	var stdout, stderr bytes.Buffer
 	cmd := exec.Command("git", args...)
-	out, err := cmd.CombinedOutput()
-	return strings.TrimSpace(string(out)), err
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg != "" {
+			return "", fmt.Errorf("git %s: %w: %s", args[0], err, msg)
+		}
+		return "", fmt.Errorf("git %s: %w", args[0], err)
+	}
+	return strings.TrimSpace(stdout.String()), nil
 }
 
 // LatestTag returns the most recent tag matching the prefix, or "" if none.
+// Tags that do not parse as a version with the given prefix are skipped, so a
+// stray non-semver tag cannot break the bump.
 func (ExecGit) LatestTag(prefix string) (string, error) {
 	out, err := run("tag", "--list", prefix+"*", "--sort=-version:refname")
 	if err != nil {
 		return "", err
 	}
-	if out == "" {
-		return "", nil
+	for _, tag := range strings.Split(out, "\n") {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		if _, err := semver.ParseWithPrefix(tag, prefix); err == nil {
+			return tag, nil
+		}
 	}
-	first, _, _ := strings.Cut(out, "\n")
-	return first, nil
+	return "", nil
 }
 
 // CommitsSince returns commit messages since the given tag (or all if tag is empty).
@@ -77,7 +97,7 @@ func (ExecGit) PushTag(tag string) error {
 
 // Free functions delegate to Default.
 
-func LatestTag(prefix string) (string, error)     { return Default.LatestTag(prefix) }
-func CommitsSince(tag string) ([]string, error)    { return Default.CommitsSince(tag) }
-func CreateTag(tag, message string) error          { return Default.CreateTag(tag, message) }
-func PushTag(tag string) error                     { return Default.PushTag(tag) }
+func LatestTag(prefix string) (string, error)   { return Default.LatestTag(prefix) }
+func CommitsSince(tag string) ([]string, error) { return Default.CommitsSince(tag) }
+func CreateTag(tag, message string) error       { return Default.CreateTag(tag, message) }
+func PushTag(tag string) error                  { return Default.PushTag(tag) }
