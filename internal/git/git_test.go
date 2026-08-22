@@ -1,6 +1,7 @@
 package git
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -102,5 +103,55 @@ func TestRunIncludesGitStderrOnError(t *testing.T) {
 	}
 	if !strings.Contains(msg, "fatal:") {
 		t.Errorf("error should include git stderr output, got: %v", msg)
+	}
+}
+
+// initTempRepo creates a throwaway git repository and chdirs into it.
+func initTempRepo(t *testing.T) {
+	t.Helper()
+	t.Chdir(t.TempDir())
+	gitDir := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	gitDir("init", "-q", "-b", "main")
+	gitDir("config", "user.email", "test@example.com")
+	gitDir("config", "user.name", "Test")
+	gitDir("config", "commit.gpgsign", "false")
+	gitDir("commit", "--allow-empty", "--no-gpg-sign", "-m", "init")
+}
+
+func TestExecGitLatestTagSkipsUnparsableTags(t *testing.T) {
+	initTempRepo(t)
+
+	for _, tag := range []string{"v0.9.0", "not-a-version", "v-next", "v1.0.0"} {
+		cmd := exec.Command("git", "tag", tag)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("tag %s: %v: %s", tag, err, out)
+		}
+	}
+
+	tag, err := ExecGit{}.LatestTag("v")
+	if err != nil {
+		t.Fatalf("LatestTag error: %v", err)
+	}
+	if tag != "v1.0.0" {
+		t.Errorf("LatestTag = %q, want %q (only valid semver tag)", tag, "v1.0.0")
+	}
+}
+
+func TestExecGitLatestTagEmptyRepo(t *testing.T) {
+	initTempRepo(t)
+
+	tag, err := ExecGit{}.LatestTag("v")
+	if err != nil {
+		t.Fatalf("LatestTag error: %v", err)
+	}
+	if tag != "" {
+		t.Errorf("LatestTag = %q, want empty for repo without tags", tag)
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/rasalas/tagger/internal/semver"
 )
 
 // Git defines the operations needed for tagging.
@@ -37,16 +39,23 @@ func run(args ...string) (string, error) {
 }
 
 // LatestTag returns the most recent tag matching the prefix, or "" if none.
+// Tags that do not parse as a version with the given prefix are skipped, so a
+// stray non-semver tag cannot break the bump.
 func (ExecGit) LatestTag(prefix string) (string, error) {
 	out, err := run("tag", "--list", prefix+"*", "--sort=-version:refname")
 	if err != nil {
 		return "", err
 	}
-	if out == "" {
-		return "", nil
+	for _, tag := range strings.Split(out, "\n") {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		if _, err := semver.ParseWithPrefix(tag, prefix); err == nil {
+			return tag, nil
+		}
 	}
-	first, _, _ := strings.Cut(out, "\n")
-	return first, nil
+	return "", nil
 }
 
 // CommitsSince returns commit messages since the given tag (or all if tag is empty).
