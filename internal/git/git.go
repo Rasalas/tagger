@@ -88,7 +88,7 @@ func (ExecGit) PushTag(tag string) error {
 
 // Free functions delegate to Default.
 
-func LatestTag(prefix string) (string, error)     { return Default.LatestTag(prefix) }
-func CommitsSince(tag string) ([]string, error)    { return Default.CommitsSince(tag) }
-func CreateTag(tag, message string) error          { return Default.CreateTag(tag, message) }
-func PushTag(tag string) error                     { return Default.PushTag(tag) }
+func LatestTag(prefix string) (string, error)   { return Default.LatestTag(prefix) }
+func CommitsSince(tag string) ([]string, error) { return Default.CommitsSince(tag) }
+func CreateTag(tag, message string) error       { return Default.CreateTag(tag, message) }
+func PushTag(tag string) error                  { return Default.PushTag(tag) }
