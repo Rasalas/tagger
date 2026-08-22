@@ -1,6 +1,8 @@
 package git
 
 import (
+	"bytes"
+	"fmt"
 	"os/exec"
 	"strings"
 )
@@ -20,9 +22,18 @@ var Default Git = ExecGit{}
 type ExecGit struct{}
 
 func run(args ...string) (string, error) {
+	var stdout, stderr bytes.Buffer
 	cmd := exec.Command("git", args...)
-	out, err := cmd.CombinedOutput()
-	return strings.TrimSpace(string(out)), err
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg != "" {
+			return "", fmt.Errorf("git %s: %w: %s", args[0], err, msg)
+		}
+		return "", fmt.Errorf("git %s: %w", args[0], err)
+	}
+	return strings.TrimSpace(stdout.String()), nil
 }
 
 // LatestTag returns the most recent tag matching the prefix, or "" if none.

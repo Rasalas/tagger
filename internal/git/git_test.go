@@ -1,6 +1,9 @@
 package git
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 type mockGit struct {
 	latestTag  string
@@ -85,5 +88,19 @@ func TestFreeFunctionsDelegateToDefault(t *testing.T) {
 	}
 	if mock.pushCalledTag != "v1.1.0" {
 		t.Errorf("pushCalledTag = %q, want %q", mock.pushCalledTag, "v1.1.0")
+	}
+}
+
+func TestRunIncludesGitStderrOnError(t *testing.T) {
+	_, err := run("rev-parse", "--verify", "definitely-not-a-real-ref")
+	if err == nil {
+		t.Fatal("expected error for invalid ref")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "git rev-parse") {
+		t.Errorf("error should name the failing subcommand, got: %v", msg)
+	}
+	if !strings.Contains(msg, "fatal:") {
+		t.Errorf("error should include git stderr output, got: %v", msg)
 	}
 }
