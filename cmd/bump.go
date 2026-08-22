@@ -92,7 +92,7 @@ func runBumpPlan(cmd *cobra.Command, dryRun bool, dryRunMessage string) error {
 		forceCount++
 	}
 	if forceCount > 1 {
-		return fmt.Errorf("only one of --major, --minor, --patch can be specified")
+		return configErr(fmt.Errorf("only one of --major, --minor, --patch can be specified"))
 	}
 
 	// Get latest tag
@@ -110,7 +110,7 @@ func runBumpPlan(cmd *cobra.Command, dryRun bool, dryRunMessage string) error {
 	} else {
 		current, err = semver.ParseWithPrefix(latestTag, prefix)
 		if err != nil {
-			return fmt.Errorf("failed to parse tag %q: %w", latestTag, err)
+			return configErr(fmt.Errorf("failed to parse tag %q: %w", latestTag, err))
 		}
 	}
 

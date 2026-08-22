@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -20,23 +21,30 @@ var rootCmd = &cobra.Command{
 }
 
 // Execute runs the root command.
+// Exit codes: 0 = success, 1 = runtime errors, 2 = configuration errors.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		if exitErr, ok := err.(*exitError); ok {
-			os.Exit(exitErr.code)
+		var cfgErr *ConfigError
+		code := 1
+		if errors.As(err, &cfgErr) {
+			code = 2
 		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(2)
+		os.Exit(code)
 	}
 }
 
-type exitError struct {
-	code int
+// ConfigError marks a configuration problem (invalid flags or tags) so it
+// exits with code 2 instead of 1.
+type ConfigError struct {
+	Err error
 }
 
-func (e *exitError) Error() string {
-	return fmt.Sprintf("exit %d", e.code)
-}
+func (e *ConfigError) Error() string { return e.Err.Error() }
+
+func (e *ConfigError) Unwrap() error { return e.Err }
+
+func configErr(err error) error { return &ConfigError{Err: err} }
 
 func buildVersion() string {
 	if version != "" && version != "0.0.1-dev" {

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -209,6 +210,49 @@ func TestBumpMultipleForceFlags(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "only one") {
 		t.Errorf("unexpected error: %v", err)
+	}
+	var cfgErr *ConfigError
+	if !errors.As(err, &cfgErr) {
+		t.Errorf("force flag conflict should be a ConfigError, got %T", err)
+	}
+}
+
+func TestBumpInvalidTagIsConfigError(t *testing.T) {
+	mock := &mockGit{
+		latestTag: "not-a-version",
+		commits:   []string{"feat: something"},
+	}
+	_, cleanup := setupTest(mock)
+	defer cleanup()
+
+	rootCmd.SetArgs([]string{"bump", "--yes"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for unparsable tag")
+	}
+	var cfgErr *ConfigError
+	if !errors.As(err, &cfgErr) {
+		t.Errorf("unparsable tag should be a ConfigError, got %T: %v", err, err)
+	}
+}
+
+func TestBumpGitFailureIsRuntimeError(t *testing.T) {
+	mock := &mockGit{
+		latestTag: "v1.0.0",
+		commits:   []string{"feat: add feature"},
+		createErr: errors.New("exit status 128: permission denied"),
+	}
+	_, cleanup := setupTest(mock)
+	defer cleanup()
+
+	rootCmd.SetArgs([]string{"bump", "--yes"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when CreateTag fails")
+	}
+	var cfgErr *ConfigError
+	if errors.As(err, &cfgErr) {
+		t.Errorf("git runtime failure must not be a ConfigError, got: %v", err)
 	}
 }
 
