@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -12,6 +13,16 @@ import (
 	"github.com/rasalas/tagger/internal/term"
 	"github.com/spf13/cobra"
 )
+
+// confirmIn is the source for confirmation input, swappable for testing.
+var confirmIn io.Reader = os.Stdin
+
+// confirmIsTTY reports whether the confirmation input is an interactive
+// terminal, swappable for testing.
+var confirmIsTTY = func() bool {
+	fi, err := os.Stdin.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
 
 var bumpCmd = &cobra.Command{
 	Use:   "bump",
@@ -176,12 +187,10 @@ func runBumpPlan(cmd *cobra.Command, dryRun bool, dryRunMessage string) error {
 
 	// Confirmation
 	if !yes {
-		fmt.Fprintf(term.W, "  Create %s%s%s? [Y/n] ", term.Primary, nextTag, term.Reset)
-		reader := bufio.NewReader(os.Stdin)
-		answer, _ := reader.ReadString('\n')
-		answer = strings.TrimSpace(strings.ToLower(answer))
-		if answer != "" && answer != "y" && answer != "yes" {
-			term.Warn("Aborted")
+		if !confirmIsTTY() {
+			return fmt.Errorf("non-interactive session: use --yes to create %s without prompting", nextTag)
+		}
+		if !confirm(nextTag) {
 			return nil
 		}
 	}
@@ -202,6 +211,23 @@ func runBumpPlan(cmd *cobra.Command, dryRun bool, dryRunMessage string) error {
 
 	fmt.Fprintln(term.W)
 	return nil
+}
+
+func confirm(tag string) bool {
+	fmt.Fprintf(term.W, "  Create %s%s%s? [Y/n] ", term.Primary, tag, term.Reset)
+	answer, err := bufio.NewReader(confirmIn).ReadString('\n')
+	if err != nil && strings.TrimSpace(answer) == "" {
+		// EOF or read error without input — treat as abort, never as consent.
+		fmt.Fprintln(term.W)
+		term.Warn("Aborted")
+		return false
+	}
+	answer = strings.TrimSpace(strings.ToLower(answer))
+	if answer != "" && answer != "y" && answer != "yes" {
+		term.Warn("Aborted")
+		return false
+	}
+	return true
 }
 
 func formatCommit(c commit.Commit) string {
