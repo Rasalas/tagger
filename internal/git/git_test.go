@@ -1,7 +1,9 @@
 package git
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -109,20 +111,114 @@ func TestRunIncludesGitStderrOnError(t *testing.T) {
 // initTempRepo creates a throwaway git repository and chdirs into it.
 func initTempRepo(t *testing.T) {
 	t.Helper()
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_CONFIG_COUNT", "0")
 	t.Chdir(t.TempDir())
-	gitDir := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
+	gitCommand(t, "init", "-q", "-b", "main")
+	gitCommand(t, "config", "user.email", "test@example.com")
+	gitCommand(t, "config", "user.name", "Test")
+	gitCommand(t, "config", "commit.gpgsign", "false")
+	gitCommand(t, "config", "tag.gpgsign", "false")
+	gitCommand(t, "commit", "--allow-empty", "--no-gpg-sign", "-m", "init")
+}
+
+func gitCommand(t *testing.T, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v: %s", args, err, out)
 	}
-	gitDir("init", "-q", "-b", "main")
-	gitDir("config", "user.email", "test@example.com")
-	gitDir("config", "user.name", "Test")
-	gitDir("config", "commit.gpgsign", "false")
-	gitDir("commit", "--allow-empty", "--no-gpg-sign", "-m", "init")
+	return strings.TrimSpace(string(out))
+}
+
+func bareRemote(t *testing.T) string {
+	t.Helper()
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	gitCommand(t, "init", "-q", "--bare", remote)
+	gitCommand(t, "remote", "add", "origin", remote)
+	return remote
+}
+
+func TestExecGitPushTagDoesNotFollowOtherAnnotatedTags(t *testing.T) {
+	initTempRepo(t)
+	remote := bareRemote(t)
+	gitCommand(t, "config", "push.followTags", "true")
+	gitCommand(t, "tag", "-a", "private-draft", "-m", "private")
+	gitCommand(t, "tag", "-a", "v1.0.0", "-m", "release")
+
+	if err := (ExecGit{}).PushTag("v1.0.0"); err != nil {
+		t.Fatalf("PushTag: %v", err)
+	}
+	if got := gitCommand(t, "--git-dir", remote, "tag", "--list"); got != "v1.0.0" {
+		t.Errorf("remote tags = %q, want only v1.0.0", got)
+	}
+}
+
+func TestExecGitPushTagWithSameNamedBranch(t *testing.T) {
+	initTempRepo(t)
+	remote := bareRemote(t)
+	gitCommand(t, "branch", "v1.0.0")
+	gitCommand(t, "tag", "v1.0.0")
+
+	if err := (ExecGit{}).PushTag("v1.0.0"); err != nil {
+		t.Fatalf("PushTag with same-named branch: %v", err)
+	}
+	if got := gitCommand(t, "--git-dir", remote, "tag", "--list"); got != "v1.0.0" {
+		t.Errorf("remote tags = %q, want v1.0.0", got)
+	}
+	if got := gitCommand(t, "--git-dir", remote, "for-each-ref", "--format=%(refname)", "refs/heads"); got != "" {
+		t.Errorf("remote branches = %q, want none", got)
+	}
+}
+
+func TestExecGitLatestTagSkipsUnreachableTags(t *testing.T) {
+	initTempRepo(t)
+	gitCommand(t, "tag", "v1.0.0")
+	gitCommand(t, "switch", "-q", "-c", "other")
+	gitCommand(t, "commit", "--allow-empty", "--no-gpg-sign", "-m", "feat: other")
+	gitCommand(t, "tag", "v2.0.0")
+	gitCommand(t, "switch", "-q", "main")
+	gitCommand(t, "commit", "--allow-empty", "--no-gpg-sign", "-m", "fix: main")
+
+	got, err := (ExecGit{}).LatestTag("v")
+	if err != nil {
+		t.Fatalf("LatestTag: %v", err)
+	}
+	if got != "v1.0.0" {
+		t.Errorf("LatestTag = %q, want v1.0.0", got)
+	}
+}
+
+func TestExecGitLatestTagWithColumnsEnabled(t *testing.T) {
+	initTempRepo(t)
+	gitCommand(t, "config", "column.tag", "always")
+	gitCommand(t, "tag", "v1.0.0")
+	gitCommand(t, "tag", "v1.1.0")
+
+	got, err := (ExecGit{}).LatestTag("v")
+	if err != nil {
+		t.Fatalf("LatestTag: %v", err)
+	}
+	if got != "v1.1.0" {
+		t.Errorf("LatestTag = %q, want v1.1.0", got)
+	}
+}
+
+func TestExecGitLatestTagPreservesNumericBuildOrdering(t *testing.T) {
+	initTempRepo(t)
+	for _, tag := range []string{"v1.2.0-9", "v1.2.0-10"} {
+		gitCommand(t, "tag", tag)
+	}
+
+	got, err := (ExecGit{}).LatestTag("v")
+	if err != nil {
+		t.Fatalf("LatestTag: %v", err)
+	}
+	if got != "v1.2.0-10" {
+		t.Errorf("LatestTag = %q, want v1.2.0-10", got)
+	}
 }
 
 func TestExecGitLatestTagSkipsUnparsableTags(t *testing.T) {

@@ -38,11 +38,11 @@ func run(args ...string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-// LatestTag returns the most recent tag matching the prefix, or "" if none.
+// LatestTag returns the highest version tag reachable from HEAD, or "" if none.
 // Tags that do not parse as a version with the given prefix are skipped, so a
 // stray non-semver tag cannot break the bump.
 func (ExecGit) LatestTag(prefix string) (string, error) {
-	out, err := run("tag", "--list", prefix+"*", "--sort=-version:refname")
+	out, err := run("tag", "--list", "--no-column", "--merged", "HEAD", prefix+"*", "--sort=-version:refname")
 	if err != nil {
 		return "", err
 	}
@@ -91,7 +91,8 @@ func (ExecGit) CreateTag(tag, message string) error {
 
 // PushTag pushes a single tag to origin.
 func (ExecGit) PushTag(tag string) error {
-	_, err := run("push", "origin", tag)
+	ref := "refs/tags/" + tag
+	_, err := run("push", "--no-follow-tags", "origin", ref+":"+ref)
 	return err
 }
 
