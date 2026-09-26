@@ -28,6 +28,7 @@ var bumpCmd = &cobra.Command{
 	Use:   "bump",
 	Short: "Determine and create the next semver tag",
 	Long:  "Analyzes commits since the last tag using Conventional Commits and creates the next semantic version tag.",
+	Args:  noArgs,
 	RunE:  runBump,
 }
 
@@ -36,6 +37,7 @@ var statusCmd = &cobra.Command{
 	Aliases: []string{"suggest"},
 	Short:   "Suggest the next semver tag without creating it",
 	Long:    "Analyzes commits since the last tag using Conventional Commits and suggests the next semantic version tag.",
+	Args:    noArgs,
 	RunE:    runStatus,
 }
 
