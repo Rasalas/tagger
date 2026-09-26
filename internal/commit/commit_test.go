@@ -218,3 +218,33 @@ func TestAnalyze(t *testing.T) {
 		}
 	})
 }
+
+func TestMalformedHeadersDoNotCauseBumps(t *testing.T) {
+	for _, message := range []string{
+		"feat(api)garbage!: accidental",
+		"feat(api)(extra)!: accidental",
+		"feat(): empty scope",
+		"feat(a b): spaced scope",
+		"feat:no separator",
+		"feat: ",
+		"feat : whitespace in type",
+		"feat?!: invalid type",
+		"!: arbitrary note",
+		"feat(api)garbage!: accidental\n\nBREAKING CHANGE: invalid header",
+		"!: arbitrary note\n\nBREAKING-CHANGE: invalid header",
+	} {
+		t.Run(message, func(t *testing.T) {
+			parsed := Parse(message)
+			if parsed.Type != "" || parsed.Breaking || Classify(parsed) != semver.None {
+				t.Errorf("Parse(%q) = %+v, classify = %v; want ignored", message, parsed, Classify(parsed))
+			}
+		})
+	}
+}
+
+func TestBreakingTrailerOnValidNonReleaseType(t *testing.T) {
+	parsed := Parse("docs: remove old API guide\n\nBREAKING CHANGE: migrate to new guide")
+	if parsed.Type != "docs" || !parsed.Breaking || Classify(parsed) != semver.Major {
+		t.Errorf("Parse = %+v, classify = %v; want major", parsed, Classify(parsed))
+	}
+}

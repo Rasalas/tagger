@@ -25,6 +25,15 @@ func TestParse(t *testing.T) {
 		{"v1.-2.3", Version{}, true},
 		{"v1.2.-3", Version{}, true},
 		{"v1.2.3--4", Version{}, true},
+		{"v01.2.3", Version{}, true},
+		{"v1.02.3", Version{}, true},
+		{"v1.2.03", Version{}, true},
+		{"v+1.2.3", Version{}, true},
+		{"v1.+2.3", Version{}, true},
+		{"v1.2.+3", Version{}, true},
+		{"v1.2.3-+4", Version{}, true},
+		{"v1.2.3-04", Version{}, true},
+		{"v1.2.3-0", Version{Major: 1, Minor: 2, Patch: 3, HasBuild: true}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
@@ -67,7 +76,10 @@ func TestBump(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.level.String(), func(t *testing.T) {
-			got := v.Bump(tt.level)
+			got, err := v.Bump(tt.level)
+			if err != nil {
+				t.Fatalf("Bump(%v): %v", tt.level, err)
+			}
 			if got != tt.want {
 				t.Errorf("Bump(%v) = %v, want %v", tt.level, got, tt.want)
 			}
@@ -88,9 +100,38 @@ func TestBumpWithBuild(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.level.String(), func(t *testing.T) {
-			got := v.Bump(tt.level)
+			got, err := v.Bump(tt.level)
+			if err != nil {
+				t.Fatalf("Bump(%v): %v", tt.level, err)
+			}
 			if got != tt.want {
 				t.Errorf("Bump(%v) = %v, want %v", tt.level, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBumpOverflowAndResetBoundaries(t *testing.T) {
+	maxInt := int(^uint(0) >> 1)
+	for _, tc := range []struct {
+		name  string
+		input Version
+		level BumpLevel
+		want  Version
+		error bool
+	}{
+		{"major overflow", Version{Major: maxInt}, Major, Version{}, true},
+		{"minor overflow", Version{Major: 1, Minor: maxInt}, Minor, Version{}, true},
+		{"patch overflow", Version{Major: 1, Minor: 2, Patch: maxInt}, Patch, Version{}, true},
+		{"build overflow", Version{Major: 1, Build: maxInt, HasBuild: true}, Patch, Version{}, true},
+		{"major resets lower components", Version{Major: 1, Minor: maxInt, Patch: maxInt}, Major, Version{Major: 2}, false},
+		{"minor resets patch", Version{Major: 1, Minor: 2, Patch: maxInt}, Minor, Version{Major: 1, Minor: 3}, false},
+		{"none leaves maximum build unchanged", Version{Major: maxInt, Build: maxInt, HasBuild: true}, None, Version{Major: maxInt, Build: maxInt, HasBuild: true}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.input.Bump(tc.level)
+			if (err != nil) != tc.error || got != tc.want {
+				t.Errorf("Bump(%v) = (%+v, %v), want (%+v, error=%v)", tc.level, got, err, tc.want, tc.error)
 			}
 		})
 	}

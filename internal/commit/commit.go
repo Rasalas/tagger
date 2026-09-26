@@ -2,6 +2,7 @@ package commit
 
 import (
 	"strings"
+	"unicode"
 
 	"github.com/rasalas/tagger/internal/semver"
 )
@@ -21,23 +22,16 @@ func Parse(message string) Commit {
 	first = strings.TrimSpace(first)
 	body = strings.TrimSpace(body)
 
-	c := Commit{Body: body}
-
-	// Check for BREAKING CHANGE in body
+	c := Commit{Summary: first, Body: body}
+	if !parseGitLabMerge(first, &c) && !parseConventionalHeader(first, &c) {
+		return c
+	}
 	for _, line := range strings.Split(body, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "BREAKING CHANGE:") || strings.HasPrefix(line, "BREAKING-CHANGE:") {
 			c.Breaking = true
 			break
 		}
-	}
-
-	if parseGitLabMerge(first, &c) {
-		return c
-	}
-
-	if !parseConventionalHeader(first, &c) {
-		c.Summary = first
 	}
 	return c
 }
@@ -47,6 +41,9 @@ func parseConventionalHeader(first string, c *Commit) bool {
 	if !found {
 		return false
 	}
+	if !strings.HasPrefix(summary, " ") || strings.TrimSpace(summary) == "" {
+		return false
+	}
 
 	// Check for '!' before the colon
 	breaking := strings.HasSuffix(prefix, "!")
@@ -54,25 +51,53 @@ func parseConventionalHeader(first string, c *Commit) bool {
 		prefix = prefix[:len(prefix)-1]
 	}
 
-	// Extract scope from "type(scope)"
-	var typ, scope string
+	// The entire prefix must be a type or type(scope), with no trailing text.
+	typ, scope := prefix, ""
 	if open := strings.Index(prefix, "("); open != -1 {
-		close := strings.Index(prefix[open:], ")")
-		if close == -1 {
-			// Unclosed parenthesis — not a valid conventional header.
+		if !strings.HasSuffix(prefix, ")") {
 			return false
 		}
-		scope = prefix[open+1 : open+close]
+		scope = prefix[open+1 : len(prefix)-1]
 		typ = prefix[:open]
-	} else {
-		typ = prefix
+		if !validHeaderToken(scope) {
+			return false
+		}
+	}
+	if !validType(typ) {
+		return false
 	}
 
 	// Only mutate the commit once the header is known to be valid.
 	c.Summary = strings.TrimSpace(summary)
 	c.Breaking = c.Breaking || breaking
 	c.Scope = scope
-	c.Type = strings.ToLower(strings.TrimSpace(typ))
+	c.Type = strings.ToLower(typ)
+	return true
+}
+
+func validHeaderToken(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if unicode.IsSpace(r) || unicode.IsControl(r) || strings.ContainsRune("():!", r) {
+			return false
+		}
+	}
+	return true
+}
+
+func validType(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || i > 0 && (c >= '0' && c <= '9' || c == '-' || c == '_') {
+			continue
+		}
+		return false
+	}
 	return true
 }
 
