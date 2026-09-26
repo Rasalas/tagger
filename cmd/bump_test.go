@@ -19,13 +19,39 @@ type mockGit struct {
 	createErr  error
 	pushErr    error
 
-	createdTag string
-	createdMsg string
-	pushedTag  string
+	createdTag  string
+	createdMsg  string
+	pushedTag   string
+	latestCalls int
 }
 
 func (m *mockGit) LatestTag(prefix string) (string, error) {
+	m.latestCalls++
 	return m.latestTag, m.latestErr
+}
+
+func TestCommandsRejectPositionalArgumentsBeforeGit(t *testing.T) {
+	for _, args := range [][]string{
+		{"bump", "dry-run", "--yes", "--no-push"},
+		{"bump", "--yes", "--", "unexpected"},
+		{"status", "unexpected"},
+		{"suggest", "unexpected"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			mock := &mockGit{latestTag: "v1.0.0", commits: []string{"fix: example"}}
+			_, cleanup := setupTest(mock)
+			t.Cleanup(cleanup)
+			rootCmd.SetArgs(args)
+			err := rootCmd.Execute()
+			var cfgErr *ConfigError
+			if !errors.As(err, &cfgErr) {
+				t.Errorf("got %v, want configuration error", err)
+			}
+			if mock.latestCalls != 0 || mock.createdTag != "" || mock.pushedTag != "" {
+				t.Fatalf("invalid arguments performed Git operations: %+v", mock)
+			}
+		})
+	}
 }
 
 func (m *mockGit) CommitsSince(tag string) ([]string, error) {
