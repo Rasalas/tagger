@@ -38,7 +38,7 @@ func run(args ...string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-// LatestTag returns the highest version tag reachable from HEAD, or "" if none.
+// LatestTag returns the highest matching version tag reachable from HEAD, or "" if none.
 // Tags that do not parse as a version with the given prefix are skipped, so a
 // stray non-semver tag cannot break the bump.
 func (ExecGit) LatestTag(prefix string) (string, error) {

@@ -44,6 +44,10 @@ tagger bump --patch
 `tagger status` has the same analysis flags (`--major`, `--minor`, `--patch`,
 `--prefix`) and never creates or pushes a tag. `tagger suggest` is an alias.
 
+The release baseline is the highest valid version tag matching `--prefix` that
+is reachable from `HEAD`. Tags on branches that have not been merged into the
+current history are ignored.
+
 ## Build suffixes
 
 Tagger also supports numeric build suffixes such as `v3.4.0-58`. When the
