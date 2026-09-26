@@ -69,28 +69,40 @@ func parse(s, tag string) (Version, error) {
 	if len(parts) != 3 {
 		return Version{}, fmt.Errorf("invalid version: %q", tag)
 	}
-	maj, err := strconv.Atoi(parts[0])
-	if err != nil || maj < 0 {
+	maj, err := parseDecimal(parts[0])
+	if err != nil {
 		return Version{}, fmt.Errorf("invalid major: %q", tag)
 	}
-	min, err := strconv.Atoi(parts[1])
-	if err != nil || min < 0 {
+	min, err := parseDecimal(parts[1])
+	if err != nil {
 		return Version{}, fmt.Errorf("invalid minor: %q", tag)
 	}
-	pat, err := strconv.Atoi(parts[2])
-	if err != nil || pat < 0 {
+	pat, err := parseDecimal(parts[2])
+	if err != nil {
 		return Version{}, fmt.Errorf("invalid patch: %q", tag)
 	}
 	v := Version{Major: maj, Minor: min, Patch: pat}
 	if hasBuild {
-		n, err := strconv.Atoi(build)
-		if err != nil || n < 0 {
+		n, err := parseDecimal(build)
+		if err != nil {
 			return Version{}, fmt.Errorf("invalid build: %q", tag)
 		}
 		v.Build = n
 		v.HasBuild = true
 	}
 	return v, nil
+}
+
+func parseDecimal(s string) (int, error) {
+	if s == "" || len(s) > 1 && s[0] == '0' {
+		return 0, fmt.Errorf("noncanonical decimal %q", s)
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return 0, fmt.Errorf("non-decimal character in %q", s)
+		}
+	}
+	return strconv.Atoi(s)
 }
 
 // String returns the version without prefix, e.g. "1.2.3".
@@ -107,20 +119,36 @@ func (v Version) Format(prefix string) string {
 	return prefix + v.String()
 }
 
-// Bump returns a new version bumped by the given level.
-func (v Version) Bump(level BumpLevel) Version {
+// Bump returns a new version or an error if an increment would overflow.
+func (v Version) Bump(level BumpLevel) (Version, error) {
+	if level != Major && level != Minor && level != Patch {
+		return v, nil
+	}
+	maxInt := int(^uint(0) >> 1)
 	nextBuild := v.Build
 	if v.HasBuild {
+		if v.Build == maxInt {
+			return Version{}, fmt.Errorf("build counter overflow at %d", v.Build)
+		}
 		nextBuild++
 	}
 	switch level {
 	case Major:
-		return Version{Major: v.Major + 1, Build: nextBuild, HasBuild: v.HasBuild}
+		if v.Major == maxInt {
+			return Version{}, fmt.Errorf("major version overflow at %d", v.Major)
+		}
+		return Version{Major: v.Major + 1, Build: nextBuild, HasBuild: v.HasBuild}, nil
 	case Minor:
-		return Version{Major: v.Major, Minor: v.Minor + 1, Build: nextBuild, HasBuild: v.HasBuild}
+		if v.Minor == maxInt {
+			return Version{}, fmt.Errorf("minor version overflow at %d", v.Minor)
+		}
+		return Version{Major: v.Major, Minor: v.Minor + 1, Build: nextBuild, HasBuild: v.HasBuild}, nil
 	case Patch:
-		return Version{Major: v.Major, Minor: v.Minor, Patch: v.Patch + 1, Build: nextBuild, HasBuild: v.HasBuild}
+		if v.Patch == maxInt {
+			return Version{}, fmt.Errorf("patch version overflow at %d", v.Patch)
+		}
+		return Version{Major: v.Major, Minor: v.Minor, Patch: v.Patch + 1, Build: nextBuild, HasBuild: v.HasBuild}, nil
 	default:
-		return v
+		return v, nil
 	}
 }

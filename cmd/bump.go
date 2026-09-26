@@ -171,7 +171,10 @@ func buildPlan(opts bumpOptions) (*bumpPlan, error) {
 		return nil, nil
 	}
 
-	p.next = p.current.Bump(level)
+	p.next, err = p.current.Bump(level)
+	if err != nil {
+		return nil, fmt.Errorf("cannot calculate next tag from %s: %w", p.currentTag, err)
+	}
 	p.nextTag = p.next.Format(opts.prefix)
 	return p, nil
 }
