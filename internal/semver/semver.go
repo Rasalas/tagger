@@ -121,7 +121,7 @@ func (v Version) Format(prefix string) string {
 
 // Bump returns a new version or an error if an increment would overflow.
 func (v Version) Bump(level BumpLevel) (Version, error) {
-	if level == None {
+	if level != Major && level != Minor && level != Patch {
 		return v, nil
 	}
 	maxInt := int(^uint(0) >> 1)

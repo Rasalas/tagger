@@ -127,6 +127,7 @@ func TestBumpOverflowAndResetBoundaries(t *testing.T) {
 		{"major resets lower components", Version{Major: 1, Minor: maxInt, Patch: maxInt}, Major, Version{Major: 2}, false},
 		{"minor resets patch", Version{Major: 1, Minor: 2, Patch: maxInt}, Minor, Version{Major: 1, Minor: 3}, false},
 		{"none leaves maximum build unchanged", Version{Major: maxInt, Build: maxInt, HasBuild: true}, None, Version{Major: maxInt, Build: maxInt, HasBuild: true}, false},
+		{"unknown level leaves maximum build unchanged", Version{Major: maxInt, Build: maxInt, HasBuild: true}, BumpLevel(99), Version{Major: maxInt, Build: maxInt, HasBuild: true}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := tc.input.Bump(tc.level)
